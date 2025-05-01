@@ -7,6 +7,7 @@ import jinja2
 from src.config import config
 from src.logger import setup_logger
 from src.middleware import handle_request, error_handler
+from src.proxy import proxy_service
 
 
 def setup_argparse() -> argparse.ArgumentParser:
@@ -44,12 +45,37 @@ def setup_argparse() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "-ml", "--machine-sec",
-        type=bool,
+        action="store_true",
         default=False,
         help="Enable machine learning security (default: False)"
     )
 
+    parser.add_argument(
+        "-sg", "--signature-sec",
+        action="store_true",
+        default=False,
+        help="Enable signature security (default: False)"
+    )
+    
+    """
+    Example of a rate limit argument
+       --rate-limit 60:50 -> ttl:max_req_len
+    """
+    parser.add_argument(
+        "-rt", "--rate-limit",
+        type=str, 
+        default=None,
+        help="Enable ddos rate-limit security (default: False)\n Expl 60:50 -> ttl:max_req_len"
+    )
     return parser
+
+async def on_startup(app):
+    """Инициализация сессии при старте приложения."""
+    await proxy_service.init_session()
+
+async def on_shutdown(app):
+    """Закрытие сессии при завершении приложения."""
+    await proxy_service.close()
 
 
 def create_reverse_proxy_app() -> web.Application:
@@ -60,6 +86,9 @@ def create_reverse_proxy_app() -> web.Application:
 
     app.router.add_route("*", "/{tail:.*}", handle_request)
     app.router.add_route("GET", "/error", error_handler)
+
+    app.on_startup.append(on_startup)
+    app.on_shutdown.append(on_shutdown)
 
     app.router.add_static('/src/templates/static/', path='src/templates/static', name='static')
     return app
@@ -73,6 +102,9 @@ def main():
     config.target_host = args.target_host
     config.verbose = args.verbose
     config.machine_sec = args.machine_sec
+    config.signature_sec = args.signature_sec
+    config.rate_limit = args.rate_limit
+    #config.timeout = args.timeout
 
     logger = setup_logger()
 

@@ -23,7 +23,6 @@ def detect_payloads(url_or_param: str):
     if not isinstance(url_or_param, str):
         logger.error("Input must be a string")
         return []
-    
 
     findings = []
     for vuln_type, patterns in compiled_patterns.items():
